@@ -68,6 +68,7 @@ const game = {
   score: 0,
   aiScore: 0,
   sideScores: [0, 0],
+  rallyHits: 0,
   streak: 0,
   timeLeft: 60,
   spawnTimer: 1,
@@ -369,7 +370,7 @@ class MatchScene extends Phaser.Scene {
       targetIndex: target,
       travel: fromFar ? 0.08 : 0.92,
       direction: fromFar ? 1 : -1,
-      speed: 0.28 + Math.min(0.12, game.score / 1800),
+      speed: 0.34 + Math.min(0.34, game.rallyHits * 0.025),
       xCurve: (Math.random() - 0.5) * 0.18,
       spin: Math.random() * Math.PI * 2,
       hittable: false,
@@ -482,7 +483,7 @@ class MatchScene extends Phaser.Scene {
       ball.travel = 0.08;
       ball.direction = 1;
       ball.targetIndex = 0;
-      ball.speed = 0.31 + Math.min(0.16, game.score / 1800);
+      ball.speed = 0.36 + Math.min(0.36, game.rallyHits * 0.026);
       ball.xCurve = (Math.random() - 0.5) * 0.2;
       this.burst(ball.x, ball.drawY, "#ffc857", 10);
       tone(300, 0.05, "triangle", 0.04);
@@ -541,6 +542,7 @@ class MatchScene extends Phaser.Scene {
     } else {
       game.aiScore += 1;
     }
+    game.rallyHits = 0;
     this.pulse = 0.8;
     this.burst(ball.x, ball.targetY, "#ff6f91", 8);
     tone(120, 0.12, "sawtooth", 0.04);
@@ -886,10 +888,11 @@ function registerSwing(player, power) {
     const timing = 1 - Math.min(1, Math.abs(ball.y - ball.targetY) / 95);
     const points = 1;
     if (game.playMode === "people") {
-      game.score += 1;
+      game.score = game.sideScores[0] + game.sideScores[1];
     } else {
       game.score += 1;
     }
+    game.rallyHits += 1;
     game.streak += 1;
     sceneRef.pulse = 0.4;
     sceneRef.burst(ball.x, ball.drawY, player.color, 18);
@@ -898,7 +901,7 @@ function registerSwing(player, power) {
     const nextTarget = game.playMode === "people" && game.players.length > 1 ? (playerIndex === 0 ? 1 : 0) : -1;
     ball.direction = playerIndex === 0 ? -1 : 1;
     ball.targetIndex = nextTarget;
-    ball.speed = 0.32 + Math.min(0.16, (game.score + game.streak) / 1800);
+    ball.speed = 0.38 + Math.min(0.42, game.rallyHits * 0.03);
     ball.xCurve = (Math.random() - 0.5) * 0.22;
     ball.hittable = false;
   } else {
@@ -925,6 +928,7 @@ function startMatch() {
   game.score = 0;
   game.aiScore = 0;
   game.sideScores = [0, 0];
+  game.rallyHits = 0;
   game.streak = 0;
   game.timeLeft = 60;
   game.spawnTimer = 0.8;
@@ -942,7 +946,7 @@ function finishGame() {
   tv.hud.hidden = true;
   tv.result.hidden = false;
   tv.finalScore.textContent = game.playMode === "ai" ? `${game.score}-${game.aiScore}` : game.playMode === "people" ? `${game.sideScores[0]}-${game.sideScores[1]}` : String(game.score);
-  tv.resultLine.textContent = game.score > 900 ? "Grand Slam energy." : game.score > 450 ? "That was a clean rally." : "Warm up the serve return and run it back.";
+  tv.resultLine.textContent = game.streak >= 12 ? "Grand Slam energy." : game.streak >= 6 ? "That was a clean rally." : "Warm up the serve return and run it back.";
   broadcast({ type: "finish", score: game.score });
 }
 
