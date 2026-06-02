@@ -40,6 +40,8 @@ const phone = {
   status: $("phoneStatus"),
   controllerName: $("controllerName"),
   permission: $("permissionButton"),
+  calibrate: $("calibrateButton"),
+  calibrationReadout: $("calibrationReadout"),
   swing: $("swingButton"),
   meter: $("meterFill"),
   readout: $("motionReadout"),
@@ -370,7 +372,7 @@ class MatchScene extends Phaser.Scene {
       targetIndex: target,
       travel: fromFar ? 0.08 : 0.92,
       direction: fromFar ? 1 : -1,
-      speed: 0.34 + Math.min(0.34, game.rallyHits * 0.025),
+      speed: 0.42 + Math.min(0.72, game.rallyHits * 0.075),
       xCurve: (Math.random() - 0.5) * 0.18,
       spin: Math.random() * Math.PI * 2,
       hittable: false,
@@ -483,7 +485,7 @@ class MatchScene extends Phaser.Scene {
       ball.travel = 0.08;
       ball.direction = 1;
       ball.targetIndex = 0;
-      ball.speed = 0.36 + Math.min(0.36, game.rallyHits * 0.026);
+      ball.speed = 0.46 + Math.min(0.78, game.rallyHits * 0.08);
       ball.xCurve = (Math.random() - 0.5) * 0.2;
       this.burst(ball.x, ball.drawY, "#ffc857", 10);
       tone(300, 0.05, "triangle", 0.04);
@@ -878,13 +880,19 @@ function registerSwing(player, power) {
   player.energy = Math.min(1, Math.max(player.energy, power));
   player.swingFlash = 1;
   const ball = sceneRef.rallyBall;
-  if (ball?.active && ball.targetIndex === playerIndex && ball.hittable) {
-    if (power < HIT_POWER_THRESHOLD) {
-      tone(210, 0.06, "square", 0.025);
-      if (player.conn.open) player.conn.send({ type: "miss" });
-      updateHud();
-      return;
-    }
+  const canAttemptHit = ball?.active && ball.targetIndex === playerIndex && ball.hittable;
+  if (!canAttemptHit) {
+    tone(190, 0.035, "square", 0.018);
+    updateHud();
+    return;
+  }
+  if (power < HIT_POWER_THRESHOLD) {
+    tone(210, 0.06, "square", 0.025);
+    if (player.conn.open) player.conn.send({ type: "weak", power });
+    updateHud();
+    return;
+  }
+  if (canAttemptHit) {
     const timing = 1 - Math.min(1, Math.abs(ball.y - ball.targetY) / 95);
     const points = 1;
     if (game.playMode === "people") {
@@ -897,25 +905,35 @@ function registerSwing(player, power) {
     sceneRef.pulse = 0.4;
     sceneRef.burst(ball.x, ball.drawY, player.color, 18);
     tone(360 + timing * 320, 0.08, "triangle", 0.08);
-    if (player.conn.open) player.conn.send({ type: "hit", quality: timing, points });
+    if (player.conn.open) player.conn.send({ type: "hit", quality: timing, points, power });
     const nextTarget = game.playMode === "people" && game.players.length > 1 ? (playerIndex === 0 ? 1 : 0) : -1;
     ball.direction = playerIndex === 0 ? -1 : 1;
     ball.targetIndex = nextTarget;
-    ball.speed = 0.38 + Math.min(0.42, game.rallyHits * 0.03);
-    ball.xCurve = (Math.random() - 0.5) * 0.22;
+    const powerBonus = Math.max(0, Math.min(0.55, (power - HIT_POWER_THRESHOLD) * 0.55));
+    ball.speed = 0.5 + Math.min(0.9, game.rallyHits * 0.09) + powerBonus;
+    ball.xCurve = (Math.random() - 0.5) * (0.22 + powerBonus * 0.34);
     ball.hittable = false;
-  } else {
-    game.streak = 0;
-    tone(170, 0.07, "square", 0.035);
-    if (player.conn.open) player.conn.send({ type: "miss" });
   }
   updateHud();
 }
 
 function updateHud() {
-  tv.score.textContent = game.playMode === "ai" ? `${game.score}-${game.aiScore}` : game.playMode === "people" ? `${game.sideScores[0]}-${game.sideScores[1]}` : String(game.score);
+  tv.score.textContent = scoreLabel();
   tv.streak.textContent = String(game.streak);
   tv.timer.textContent = String(Math.ceil(game.timeLeft));
+}
+
+function tennisPoint(value) {
+  if (value <= 0) return "0";
+  if (value === 1) return "15";
+  if (value === 2) return "30";
+  if (value === 3) return "40";
+  return String(value);
+}
+
+function scoreLabel() {
+  if (game.playMode === "people") return `${tennisPoint(game.sideScores[0])}-${tennisPoint(game.sideScores[1])}`;
+  return `${tennisPoint(game.score)}-${tennisPoint(game.aiScore)}`;
 }
 
 function startMatch() {
@@ -945,7 +963,7 @@ function finishGame() {
   game.mode = "result";
   tv.hud.hidden = true;
   tv.result.hidden = false;
-  tv.finalScore.textContent = game.playMode === "ai" ? `${game.score}-${game.aiScore}` : game.playMode === "people" ? `${game.sideScores[0]}-${game.sideScores[1]}` : String(game.score);
+  tv.finalScore.textContent = scoreLabel();
   tv.resultLine.textContent = game.streak >= 12 ? "Grand Slam energy." : game.streak >= 6 ? "That was a clean rally." : "Warm up the serve return and run it back.";
   broadcast({ type: "finish", score: game.score });
 }
@@ -1107,9 +1125,12 @@ function handleHostMessage(data) {
     buzz(18);
   }
   if (data.type === "hit") {
-    setPhoneStatus(`Hit! +${data.points}`);
+    setPhoneStatus(`Hit! Power ${Number(data.power || 0).toFixed(1)}`);
     buzz(25);
     tone(520 + data.quality * 180, 0.06, "triangle", 0.05);
+  }
+  if (data.type === "weak") {
+    setPhoneStatus(`Weak swing (${Number(data.power || 0).toFixed(1)}). Calibrate or swing harder.`);
   }
   if (data.type === "miss") {
     setPhoneStatus("Miss. Wait for the next ball.");
@@ -1127,6 +1148,17 @@ function handleHostMessage(data) {
 let lastSwing = 0;
 let lastMotionSend = 0;
 let smoothEnergy = 0;
+let swingThreshold = Number(localStorage.getItem("phone-tennis-threshold") || "1.2");
+let calibratingUntil = 0;
+let calibrationPeak = 0;
+
+function updateCalibrationReadout() {
+  if (phone.calibrationReadout) phone.calibrationReadout.textContent = `Hit power: ${swingThreshold.toFixed(1)}`;
+}
+
+function normalizedPower(energy) {
+  return Math.min(1.8, (energy / Math.max(0.25, swingThreshold)) * HIT_POWER_THRESHOLD);
+}
 
 function motionEnergy(event) {
   const a = event.accelerationIncludingGravity || event.acceleration || {};
@@ -1139,18 +1171,36 @@ function motionEnergy(event) {
 function onMotion(event) {
   const energy = motionEnergy(event);
   smoothEnergy = smoothEnergy * 0.75 + energy * 0.25;
-  const meter = Math.min(100, smoothEnergy * 70);
+  const power = normalizedPower(smoothEnergy);
+  const meter = Math.min(100, power * 58);
   phone.meter.style.width = `${meter}%`;
-  phone.readout.textContent = smoothEnergy.toFixed(1);
+  phone.readout.textContent = power.toFixed(1);
   const now = performance.now();
+  if (calibratingUntil > now) {
+    calibrationPeak = Math.max(calibrationPeak, smoothEnergy);
+  } else if (calibratingUntil !== 0) {
+    calibratingUntil = 0;
+    swingThreshold = Math.max(0.35, Math.min(1.45, calibrationPeak * 0.72 || 1.2));
+    localStorage.setItem("phone-tennis-threshold", String(swingThreshold));
+    updateCalibrationReadout();
+    setPhoneStatus(`Calibration saved. Hit power is ${swingThreshold.toFixed(1)}.`);
+  }
   if (now - lastMotionSend > 90) {
-    send({ type: "motion", energy: Math.min(1, smoothEnergy) });
+    send({ type: "motion", energy: Math.min(1.8, power) });
     lastMotionSend = now;
   }
-  if (smoothEnergy > 0.42 && now - lastSwing > 420) {
+  if (smoothEnergy >= swingThreshold && now - lastSwing > 520) {
     lastSwing = now;
-    send({ type: "swing", power: Math.min(1.5, smoothEnergy) });
+    send({ type: "swing", power });
   }
+}
+
+function calibrateSwing() {
+  ensureAudio();
+  calibrationPeak = 0;
+  calibratingUntil = performance.now() + 2500;
+  setPhoneStatus("Calibration running. Do one normal tennis swing now.");
+  buzz(25);
 }
 
 async function enableMotion() {
@@ -1175,10 +1225,10 @@ async function enableMotion() {
 function manualSwing() {
   ensureAudio();
   lastSwing = performance.now();
-  smoothEnergy = 1.2;
+  smoothEnergy = swingThreshold;
   phone.meter.style.width = "86%";
   phone.readout.textContent = "1.2";
-  send({ type: "swing", power: 1.15 });
+  send({ type: "swing", power: HIT_POWER_THRESHOLD });
   buzz(20);
   setTimeout(() => {
     phone.meter.style.width = "8%";
@@ -1189,11 +1239,13 @@ function manualSwing() {
 function startPhone() {
   phone.code.value = (params.get("code") || "").toUpperCase();
   phone.name.value = localStorage.getItem("motion-match-name") || randomName();
+  updateCalibrationReadout();
   phone.join.addEventListener("click", () => {
     localStorage.setItem("motion-match-name", phone.name.value.trim() || randomName());
     connectPhone();
   });
   phone.permission.addEventListener("click", enableMotion);
+  phone.calibrate.addEventListener("click", calibrateSwing);
   phone.swing.addEventListener("click", manualSwing);
   phone.code.addEventListener("input", () => {
     phone.code.value = phone.code.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
