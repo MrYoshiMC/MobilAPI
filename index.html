@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Device API Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Mobile Device APIs</h1>
+        
+        <!-- Geolocation Section -->
+        <section class="card">
+            <h2>📍 Geolocation</h2>
+            <button id="getLocationBtn" class="btn btn-primary">Get Location</button>
+            <div id="locationResult" class="result hidden">
+                <p><strong>Latitude:</strong> <span id="latitude">-</span></p>
+                <p><strong>Longitude:</strong> <span id="longitude">-</span></p>
+                <p><strong>Accuracy:</strong> <span id="accuracy">-</span> meters</p>
+                <p><strong>Altitude:</strong> <span id="altitude">-</span> meters</p>
+                <p id="mapLink"></p>
+            </div>
+            <div id="locationError" class="error hidden"></div>
+        </section>
+
+        <!-- Battery Status Section -->
+        <section class="card">
+            <h2>🔋 Battery Status</h2>
+            <button id="getBatteryBtn" class="btn btn-primary">Get Battery Info</button>
+            <div id="batteryResult" class="result hidden">
+                <div class="battery-indicator">
+                    <div id="batteryBar" class="battery-bar"></div>
+                </div>
+                <p><strong>Battery Level:</strong> <span id="batteryLevel">-</span>%</p>
+                <p><strong>Charging:</strong> <span id="charging">-</span></p>
+                <p><strong>Time to Full:</strong> <span id="timeToFull">-</span></p>
+                <p><strong>Time to Empty:</strong> <span id="timeToEmpty">-</span></p>
+            </div>
+            <div id="batteryError" class="error hidden"></div>
+        </section>
+
+        <!-- Vibration Section -->
+        <section class="card">
+            <h2>📳 Vibration</h2>
+            <div class="button-group">
+                <button id="vibrateBtn" class="btn btn-success">Vibrate (100ms)</button>
+                <button id="vibrateLongBtn" class="btn btn-success">Vibrate Long (500ms)</button>
+                <button id="vibratePatternBtn" class="btn btn-success">Vibrate Pattern</button>
+                <button id="stopVibrateBtn" class="btn btn-danger">Stop Vibration</button>
+            </div>
+            <p id="vibrationStatus" class="status"></p>
+        </section>
+
+        <!-- All Features Section -->
+        <section class="card">
+            <h2>⚡ Get All Information</h2>
+            <button id="getAllBtn" class="btn btn-info">Get All Device Info</button>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
